@@ -1,0 +1,520 @@
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #142219;
+  --bg-deep: #0d1712;
+  --surface: #1d3024;
+  --surface-raised: #24392c;
+  --line: #33513f;
+  --gold: #cda233;
+  --gold-dim: #8d752e;
+  --red: #b1453f;
+  --red-dim: #7a3230;
+  --green: #6f9463;
+  --text: #ece3d0;
+  --text-dim: #9fb096;
+
+  --font-display: 'Anton', 'Arial Narrow', sans-serif;
+  --font-body: 'Space Grotesk', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: radial-gradient(ellipse at 50% 0%, var(--surface) 0%, var(--bg) 55%, var(--bg-deep) 100%);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+.dbg-app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
+}
+
+.dbg-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  animation: dbg-fade-in 0.25s ease-out;
+}
+
+@keyframes dbg-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dbg-screen { animation: none; }
+  * { transition: none !important; }
+}
+
+/* ---------- Typography ---------- */
+
+.dbg-eyebrow {
+  color: var(--text-dim);
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  margin: 0 0 6px;
+}
+
+.dbg-title {
+  font-family: var(--font-display);
+  font-size: 30px;
+  letter-spacing: 0.01em;
+  color: var(--gold);
+  margin: 0 0 4px;
+  line-height: 1.05;
+}
+
+.dbg-sub {
+  color: var(--text-dim);
+  font-size: 15px;
+  margin: 0 0 20px;
+  line-height: 1.4;
+}
+
+/* ---------- Buttons ---------- */
+
+.dbg-btn {
+  display: block;
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  padding: 18px 20px;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  color: var(--bg-deep);
+  background: var(--gold);
+  transition: transform 0.08s ease, filter 0.15s ease;
+  -webkit-appearance: none;
+}
+.dbg-btn:active { transform: scale(0.97); filter: brightness(0.95); }
+.dbg-btn + .dbg-btn { margin-top: 12px; }
+
+.dbg-btn--ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1.5px solid var(--line);
+}
+
+.dbg-btn--green { background: var(--green); color: #0d1712; }
+.dbg-btn--red { background: var(--red); color: #fbeceb; }
+.dbg-btn--small {
+  padding: 12px 16px;
+  font-size: 14px;
+  width: auto;
+}
+
+.dbg-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dbg-actions {
+  margin-top: auto;
+  padding-top: 20px;
+}
+
+/* ---------- Setup screen ---------- */
+
+.dbg-player-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.dbg-player-num {
+  font-family: var(--font-display);
+  color: var(--gold-dim);
+  font-size: 18px;
+  width: 22px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.dbg-input {
+  flex: 1;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 14px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--text);
+}
+.dbg-input:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+.dbg-input::placeholder { color: var(--text-dim); }
+
+.dbg-remove {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 22px;
+  line-height: 1;
+  padding: 6px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.dbg-remove:active { color: var(--red); }
+
+.dbg-players-list {
+  margin-bottom: 6px;
+}
+
+/* ---------- Turn / felt panel ---------- */
+
+.dbg-felt {
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 28px 22px;
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.dbg-player-name {
+  font-family: var(--font-display);
+  font-size: 26px;
+  color: var(--text);
+  letter-spacing: 0.01em;
+  margin: 0 0 2px;
+}
+
+.dbg-dice-count {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin: 0;
+}
+
+/* ---------- Dice ---------- */
+
+.dbg-dice-row {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin: 22px 0 8px;
+  flex-wrap: wrap;
+}
+
+.dbg-die {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+}
+
+.dbg-die--removed {
+  opacity: 0.25;
+}
+
+/* ---------- Claim number hero ---------- */
+
+.dbg-claim-hero {
+  font-family: var(--font-display);
+  font-size: 88px;
+  line-height: 1;
+  color: var(--gold);
+  margin: 10px 0;
+  letter-spacing: 0.02em;
+}
+
+.dbg-claim-hero--small {
+  font-size: 56px;
+}
+
+.dbg-claim-label {
+  color: var(--text-dim);
+  font-size: 15px;
+  margin: 0;
+}
+
+/* ---------- Claim quick chips ---------- */
+
+.dbg-chip-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 10px 0 4px;
+}
+
+.dbg-chip {
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.dbg-chip:active { transform: scale(0.97); }
+
+.dbg-chip-label {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.dbg-chip-value {
+  font-family: var(--font-display);
+  font-size: 30px;
+  color: var(--gold);
+  letter-spacing: 0.02em;
+}
+
+.dbg-chip--selected {
+  border-color: var(--gold);
+  background: var(--surface-raised);
+}
+.dbg-chip--selected .dbg-chip-label { color: var(--text); }
+
+.dbg-chip:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ---------- Claim entry (number pad) ---------- */
+
+.dbg-claim-input-wrap {
+  margin: 18px 0;
+}
+
+.dbg-claim-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1.5px solid var(--gold-dim);
+  border-radius: 10px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 56px;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+  padding: 14px 10px;
+}
+.dbg-claim-input:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.dbg-claim-hint {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 14px;
+  margin: 6px 0 0;
+}
+
+.dbg-claim-hint--error {
+  color: var(--red);
+}
+
+/* ---------- Pass screen ---------- */
+
+.dbg-pass {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.dbg-pass-icon {
+  font-size: 54px;
+  margin-bottom: 18px;
+}
+
+/* ---------- Reveal / verdict ---------- */
+
+.dbg-verdict {
+  font-family: var(--font-display);
+  font-size: 34px;
+  margin: 4px 0 2px;
+}
+.dbg-verdict--bluff { color: var(--red); }
+.dbg-verdict--true { color: var(--green); }
+
+.dbg-reveal-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 2px;
+  border-top: 1px solid var(--line);
+  font-size: 15px;
+}
+.dbg-reveal-row span:first-child { color: var(--text-dim); }
+
+/* ---------- Scoreboard ---------- */
+
+.dbg-scoreboard {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 4px 18px;
+  margin-top: 18px;
+}
+
+.dbg-score-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.dbg-score-row:not(:last-child) {
+  border-bottom: 1px solid var(--line);
+}
+.dbg-score-row span:first-child { color: var(--text); }
+.dbg-score-row span:last-child {
+  font-family: var(--font-display);
+  color: var(--gold);
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Who lost list ---------- */
+
+.dbg-lost-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.dbg-lost-list button:active {
+  border-color: var(--red);
+  background: var(--surface-raised);
+}
+
+.dbg-lost-count {
+  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ---------- Losses stepper (setup) ---------- */
+
+.dbg-stepper-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-top: 18px;
+}
+
+.dbg-stepper-label {
+  font-size: 15px;
+  color: var(--text);
+}
+
+.dbg-stepper {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.dbg-stepper-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid var(--gold-dim);
+  background: transparent;
+  color: var(--gold);
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.dbg-stepper-btn:active { background: var(--surface-raised); }
+
+.dbg-stepper-value {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--gold);
+  min-width: 22px;
+  text-align: center;
+}
+
+/* ---------- Utility ---------- */
+
+.dbg-center { text-align: center; }
+.dbg-spacer { flex: 1; }
+
+.dbg-out-banner {
+  background: var(--red-dim);
+  color: #fbeceb;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+/* ---------- Logo ---------- */
+
+.dbg-logo {
+  display: block;
+  width: 88px;
+  height: auto;
+  margin: 0 auto 18px;
+}
+
+.dbg-logo--pass {
+  display: block;
+  width: 72px;
+  height: auto;
+  margin: 0 auto 22px;
+}
+
+/* ---------- Setup / game-over centered layout ---------- */
+
+.dbg-screen--center {
+  justify-content: center;
+}
+
+.dbg-setup-card {
+  width: 100%;
+}
+
+.dbg-title--center,
+.dbg-sub--center {
+  text-align: center;
+}
+
+.dbg-actions--static {
+  margin-top: 32px;
+  padding-top: 0;
+}
