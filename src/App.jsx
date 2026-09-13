@@ -56,12 +56,11 @@ function isLegalClaimShape(numStr, digitCount) {
 // strip leading 6s off a claim's digits: what's left is what the next
 // player has to beat, and how many digits are left is how many dice
 // they roll. Digits are always high-to-low, so 6s are always leading.
-function stripSixes(numStr) {
-  const digits = numStr.split('');
-  let i = 0;
-  while (i < digits.length && digits[i] === '6') i++;
-  const rest = digits.slice(i).join('');
-  return { nextDiceCount: rest.length, beatValue: rest.length ? parseInt(rest, 10) : null };
+function countTrueSixes(diceArr) {
+    const sorted = [...diceArr].sort((a, b) => b - a);
+    let i = 0;
+    while (i < sorted.length && sorted[i] === 6) i++;
+    return i;
 }
 
 const emptyPlayer = () => ({ name: '' });
@@ -151,52 +150,55 @@ export default function App() {
         setPhase('rolled');
     }
 
-  function confirmClaim() {
-    const raw = claimDraft.trim();
-    const digitCount = currentRoll.length;
-    if (!isLegalClaimShape(raw, digitCount)) {
-      setClaimError(`Enter a ${digitCount}-digit dice number (digits 1-6, high to low)`);
-      return;
+    function confirmClaim() {
+        const raw = claimDraft.trim();
+        const digitCount = currentRoll.length;
+        if (!isLegalClaimShape(raw, digitCount)) {
+            setClaimError(`Enter a ${digitCount}-digit dice number (digits 1-6, high to low)`);
+            return;
+        }
+        const val = parseInt(raw, 10);
+        const minToBeat = activeClaim ? activeClaim.beatValue : null;
+        if (minToBeat !== null && val <= minToBeat) {
+            setClaimError(`Must beat ${minToBeat}`);
+            return;
+        }
+
+        const trueSixCount = countTrueSixes(currentRoll);
+        const restDigits = raw.split('').slice(trueSixCount).join('');
+        const nextDiceCount = restDigits.length;
+        const beatValue = restDigits.length ? parseInt(restDigits, 10) : null;
+
+        // Even if this claim is all sixes (nextDiceCount === 0), we still let the
+        // next player judge it — CHECK can catch a bluff before anyone is auto-out.
+        setActiveClaim({
+            value: val,
+            ownerIdx: currentIdx,
+            ownerRoll: currentRoll,
+            beatValue,
+            nextDiceCount,
+        });
+        const nextIdx = (currentIdx + 1) % gamePlayers.length;
+        setCurrentIdx(nextIdx);
+        setPassTarget({ name: gamePlayers[nextIdx].name, next: 'judge' });
+        setPhase('pass');
     }
-    const val = parseInt(raw, 10);
-    const minToBeat = activeClaim ? activeClaim.beatValue : null;
-    if (minToBeat !== null && val <= minToBeat) {
-      setClaimError(`Must beat ${minToBeat}`);
-      return;
+
+    function believe() {
+        if (activeClaim.nextDiceCount === 0) {
+            // nothing left to roll — believing this claim outright means you're out
+            setAutoOutInfo({
+                claimOwnerName: gamePlayers[activeClaim.ownerIdx].name,
+                claimValue: activeClaim.value,
+                outName: current.name,
+                outIdx: currentIdx,
+            });
+            setPhase('auto-out');
+            return;
+        }
+        setDiceThisTurn(activeClaim.nextDiceCount);
+        setPhase('roll');
     }
-
-    const { nextDiceCount, beatValue } = stripSixes(raw);
-
-    if (nextDiceCount === 0) {
-      // every remaining digit was a 6 — the next player is immediately out
-      const outIdx = (currentIdx + 1) % gamePlayers.length;
-      setAutoOutInfo({
-        claimOwnerName: current.name,
-        claimValue: val,
-        outName: gamePlayers[outIdx].name,
-        outIdx,
-      });
-      setPhase('auto-out');
-      return;
-    }
-
-    setActiveClaim({
-      value: val,
-      ownerIdx: currentIdx,
-      ownerRoll: currentRoll,
-      beatValue,
-      nextDiceCount,
-    });
-    const nextIdx = (currentIdx + 1) % gamePlayers.length;
-    setCurrentIdx(nextIdx);
-    setPassTarget({ name: gamePlayers[nextIdx].name, next: 'judge' });
-    setPhase('pass');
-  }
-
-  function believe() {
-    setDiceThisTurn(activeClaim.nextDiceCount);
-    setPhase('roll');
-  }
 
   function check() {
     setPhase('reveal');
@@ -548,39 +550,41 @@ function RolledScreen({
 }
 
 function JudgeScreen({
-                       judgeName,
-                       claimOwnerName,
-                       claimValue,
-                       nextDiceCount,
-                       beatValue,
-                       onBelieve,
-                       onCheck,
-                       onLost,
+                         judgeName,
+                         claimOwnerName,
+                         claimValue,
+                         nextDiceCount,
+                         beatValue,
+                         onBelieve,
+                         onCheck,
+                         onLost,
                      }) {
-  return (
-      <div className="dbg-screen">
-        <p className="dbg-eyebrow">{judgeName}, {claimOwnerName} claims</p>
-        <div className="dbg-felt">
-          <p className="dbg-claim-hero">{claimValue}</p>
-          <p className="dbg-claim-label">believe it, or check it</p>
+    return (
+        <div className="dbg-screen">
+            <p className="dbg-eyebrow">{judgeName}, {claimOwnerName} claims</p>
+            <div className="dbg-felt">
+                <p className="dbg-claim-hero">{claimValue}</p>
+                <p className="dbg-claim-label">believe it, or check it</p>
+            </div>
+            <p className="dbg-claim-hint">
+                {nextDiceCount === 0
+                    ? "If you believe: nothing left to roll — you're out."
+                    : `If you believe: roll ${nextDiceCount} ${nextDiceCount === 1 ? 'die' : 'dice'}, beat ${beatValue}`}
+            </p>
+            <div className="dbg-spacer" />
+            <div className="dbg-actions">
+                <button className="dbg-btn dbg-btn--green" onClick={onBelieve}>
+                    I BELIEVE
+                </button>
+                <button className="dbg-btn dbg-btn--red" onClick={onCheck}>
+                    CHECK
+                </button>
+                <button className="dbg-btn dbg-btn--ghost" onClick={onLost}>
+                    Someone lost
+                </button>
+            </div>
         </div>
-        <p className="dbg-claim-hint">
-          If you believe: roll {nextDiceCount} {nextDiceCount === 1 ? 'die' : 'dice'}, beat {beatValue}
-        </p>
-        <div className="dbg-spacer" />
-        <div className="dbg-actions">
-          <button className="dbg-btn dbg-btn--green" onClick={onBelieve}>
-            I BELIEVE
-          </button>
-          <button className="dbg-btn dbg-btn--red" onClick={onCheck}>
-            CHECK
-          </button>
-          <button className="dbg-btn dbg-btn--ghost" onClick={onLost}>
-            Someone lost
-          </button>
-        </div>
-      </div>
-  );
+    );
 }
 
 function Scoreboard({ players, targetLosses }) {
