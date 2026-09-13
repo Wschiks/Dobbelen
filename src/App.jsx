@@ -137,13 +137,12 @@ export default function App() {
     setPhase('pass');
   }
 
-  function startNewRound(afterIdx, playerList = gamePlayers) {
-    const nextIdx = (afterIdx + 1) % playerList.length;
-    setActiveClaim(null);
-    setCurrentRoll([]);
-    setDiceThisTurn(3);
-    goToRoll(nextIdx, playerList);
-  }
+    function startNewRound(startIdx, playerList = gamePlayers) {
+        setActiveClaim(null);
+        setCurrentRoll([]);
+        setDiceThisTurn(3);
+        goToRoll(startIdx, playerList);
+    }
 
     function handleRoll() {
         setCurrentRoll(rollDice(diceThisTurn, isUnlucky(current.name)));
