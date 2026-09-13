@@ -91,6 +91,9 @@ export default function App() {
   const [autoOutInfo, setAutoOutInfo] = useState(null); // { claimOwnerName, claimValue, outName, outIdx }
   const [gameOverInfo, setGameOverInfo] = useState(null); // { name, losses }
 
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [scoreOpen, setScoreOpen] = useState(false);
+
   const current = gamePlayers[currentIdx];
 
   // prefill claim draft with the true value whenever a fresh roll lands
@@ -235,13 +238,40 @@ export default function App() {
     setGameOverInfo(null);
     setPhase('setup');
   }
-
+    function backToMenu() {
+        setMenuOpen(false);
+        setScoreOpen(false);
+        setGamePlayers([]);
+        setCurrentIdx(0);
+        setActiveClaim(null);
+        setCurrentRoll([]);
+        setAutoOutInfo(null);
+        setGameOverInfo(null);
+        setPhase('setup');
+    }
   // ---------- render ----------
 
-  return (
-      <div className="dbg-app">
-        {phase === 'setup' && (
-            <SetupScreen
+    return (
+        <div className="dbg-app">
+            {['roll', 'rolled', 'judge', 'reveal', 'auto-out', 'lost-select'].includes(phase) && (
+                <BurgerMenu
+                    open={menuOpen}
+                    onToggle={() => setMenuOpen((o) => !o)}
+                    onShowScore={() => { setScoreOpen(true); setMenuOpen(false); }}
+                    onMainMenu={backToMenu}
+                />
+            )}
+
+            {scoreOpen && (
+                <ScoreboardModal
+                    players={gamePlayers}
+                    targetLosses={targetLosses}
+                    onClose={() => setScoreOpen(false)}
+                />
+            )}
+
+            {phase === 'setup' && (
+                <SetupScreen
                 players={players}
                 updatePlayerName={updatePlayerName}
                 addPlayer={addPlayer}
@@ -587,19 +617,57 @@ function JudgeScreen({
 }
 
 function Scoreboard({ players, targetLosses }) {
-  return (
-      <div className="dbg-scoreboard">
-        {players.map((p, i) => (
-            <div className="dbg-score-row" key={i}>
-              <span>{p.name}</span>
-              <span>
+    return (
+        <div className="dbg-scoreboard">
+            {players.map((p, i) => (
+                <div className="dbg-score-row" key={i}>
+                    <span>{p.name}</span>
+                    <span>
             {p.losses}
-                {targetLosses ? ` / ${targetLosses}` : ''}
+                        {targetLosses ? ` / ${targetLosses}` : ''}
           </span>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function BurgerMenu({ open, onToggle, onShowScore, onMainMenu }) {
+    return (
+        <>
+            <button className="dbg-burger" aria-label="Menu" onClick={onToggle}>
+                <span />
+                <span />
+                <span />
+            </button>
+            {open && (
+                <div className="dbg-menu-overlay" onClick={onToggle}>
+                    <div className="dbg-menu-panel" onClick={(e) => e.stopPropagation()}>
+                        <button className="dbg-menu-item" onClick={onShowScore}>
+                            Scoreboard
+                        </button>
+                        <button className="dbg-menu-item dbg-menu-item--danger" onClick={onMainMenu}>
+                            Main menu
+                        </button>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
+
+function ScoreboardModal({ players, targetLosses, onClose }) {
+    return (
+        <div className="dbg-menu-overlay" onClick={onClose}>
+            <div className="dbg-menu-panel" onClick={(e) => e.stopPropagation()}>
+                <p className="dbg-eyebrow" style={{ marginBottom: 10 }}>Scoreboard</p>
+                <Scoreboard players={players} targetLosses={targetLosses} />
+                <button className="dbg-btn dbg-btn--ghost" style={{ marginTop: 16 }} onClick={onClose}>
+                    Close
+                </button>
             </div>
-        ))}
-      </div>
-  );
+        </div>
+    );
 }
 
 function RevealScreen({

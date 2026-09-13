@@ -487,7 +487,7 @@ body {
 
 .dbg-logo {
   display: block;
-  width: 88px;
+  width: 12rem;
   height: auto;
   margin: 0 auto 18px;
 }
@@ -518,3 +518,66 @@ body {
   margin-top: 32px;
   padding-top: 0;
 }
+/* ---------- Burger menu ---------- */
+
+.dbg-burger {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 20;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.dbg-burger span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--gold);
+  border-radius: 1px;
+}
+
+.dbg-menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(13, 23, 18, 0.7);
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  z-index: 30;
+  padding: 70px 20px 20px;
+}
+
+.dbg-menu-panel {
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  width: 220px;
+  max-width: 100%;
+}
+
+.dbg-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 12px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.dbg-menu-item:active { background: var(--surface); }
+.dbg-menu-item--danger { color: var(--red); }
