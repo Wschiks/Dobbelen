@@ -598,7 +598,7 @@ function JudgeScreen({
             <p className="dbg-claim-hint">
                 {nextDiceCount === 0
                     ? "If you believe: nothing left to roll — you're out."
-                    : `If you believe: roll ${nextDiceCount} ${nextDiceCount === 1 ? 'die' : 'dice'}, beat ${beatValue}`}
+                    : `If you believe: dan is dat zo 🤙`}
             </p>
             <div className="dbg-spacer" />
             <div className="dbg-actions">
