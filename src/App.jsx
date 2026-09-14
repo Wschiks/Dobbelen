@@ -492,6 +492,7 @@ function RolledScreen({
   const base = activeClaim ? activeClaim.beatValue : trueValue;
 
     const prevActual = activeClaim ? claimNumber(activeClaim.ownerRoll) : null;
+    const prevWasBluff = activeClaim ? prevActual !== activeClaim.value : false;
 
     const claims = validClaimsForDigits(digitCount); // ascending, legal dice numbers only
     const firstIdx = claims.findIndex((v) => v > base);
@@ -519,6 +520,9 @@ function RolledScreen({
             {activeClaim && (
                 <p className="dbg-claim-hint" style={{ marginTop: -2, marginBottom: 10 }}>
                     Vorige worp was {prevActual}
+                    {prevWasBluff && (
+                        <span style={{ color: 'var(--red)' }}> (claimed {activeClaim.value} — bluff!)</span>
+                    )}
                 </p>
             )}
             <div className="dbg-dice-row">
