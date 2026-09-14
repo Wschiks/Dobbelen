@@ -62,6 +62,20 @@ function countTrueSixes(diceArr) {
     while (i < sorted.length && sorted[i] === 6) i++;
     return i;
 }
+// increments the rightmost digit that's still allowed to go up
+// while staying a legal non-increasing dice number, e.g. 432 -> 433, 433 -> 443
+// returns null if already maxed out (e.g. 666)
+function nextDoorschuivenValue(numStr) {
+    const digits = numStr.split('').map(Number);
+    for (let i = digits.length - 1; i >= 0; i--) {
+        const leftBound = i === 0 ? 6 : digits[i - 1];
+        if (digits[i] + 1 <= leftBound) {
+            digits[i] += 1;
+            return parseInt(digits.join(''), 10);
+        }
+    }
+    return null;
+}
 
 const emptyPlayer = () => ({ name: '' });
 
@@ -201,7 +215,33 @@ export default function App() {
         setDiceThisTurn(activeClaim.nextDiceCount);
         setPhase('roll');
     }
+    function doorschuiven() {
+        const beatStr = String(activeClaim.beatValue);
+        const newVal = nextDoorschuivenValue(beatStr);
+        if (newVal === null) return; // shouldn't happen if button is disabled correctly
 
+        // If the claim we're building on was itself a blind push-through, nobody
+        // has looked at dice since that hidden roll — carry it forward untouched.
+        // Otherwise this is the FIRST schuifdoor in the chain: roll fresh dice now,
+        // but the current player never looks at the result.
+        const hiddenRoll = activeClaim.viaDoorschuiven
+            ? activeClaim.ownerRoll
+            : rollDice(diceThisTurn, isUnlucky(current.name));
+
+        setActiveClaim({
+            value: newVal,
+            ownerIdx: currentIdx,
+            ownerRoll: hiddenRoll,
+            beatValue: newVal,
+            nextDiceCount: diceThisTurn, // unseen dice, so digit count carries over unchanged
+            viaDoorschuiven: true,
+            doorschuivenFrom: activeClaim.beatValue,
+        });
+        const nextIdx = (currentIdx + 1) % gamePlayers.length;
+        setCurrentIdx(nextIdx);
+        setPassTarget({ name: gamePlayers[nextIdx].name, next: 'judge' });
+        setPhase('pass');
+    }
   function check() {
     setPhase('reveal');
   }
@@ -288,13 +328,14 @@ export default function App() {
                 onReady={() => setPhase(passTarget.next)}
             />
         )}
-
         {phase === 'roll' && current && (
             <RollScreen
                 player={current}
                 diceCount={diceThisTurn}
                 onRoll={handleRoll}
                 onLost={openLostSelect}
+                canDoorschuiven={!!activeClaim && nextDoorschuivenValue(String(activeClaim.beatValue)) !== null}
+                onDoorschuiven={doorschuiven}
             />
         )}
 
@@ -319,6 +360,8 @@ export default function App() {
                 claimValue={activeClaim.value}
                 nextDiceCount={activeClaim.nextDiceCount}
                 beatValue={activeClaim.beatValue}
+                viaDoorschuiven={activeClaim.viaDoorschuiven}
+                doorschuivenFrom={activeClaim.doorschuivenFrom}
                 onBelieve={believe}
                 onCheck={check}
                 onLost={openLostSelect}
@@ -439,26 +482,31 @@ function SetupScreen({
     );
 }
 
-function RollScreen({ player, diceCount, onRoll, onLost }) {
-  return (
-      <div className="dbg-screen">
+function RollScreen({ player, diceCount, onRoll, onLost, canDoorschuiven, onDoorschuiven }) {
+return (
+    <div className="dbg-screen">
         <div className="dbg-felt">
-          <p className="dbg-player-name">{player.name}</p>
-          <p className="dbg-dice-count">
-            {diceCount} {diceCount === 1 ? 'die' : 'dice'} in the cup
-          </p>
+            <p className="dbg-player-name">{player.name}</p>
+            <p className="dbg-dice-count">
+                {diceCount} {diceCount === 1 ? 'die' : 'dice'} in the cup
+            </p>
         </div>
         <div className="dbg-spacer" />
         <div className="dbg-actions">
-          <button className="dbg-btn" onClick={onRoll}>
-            ROLL DICE
-          </button>
-          <button className="dbg-btn dbg-btn--ghost" onClick={onLost}>
-            Someone lost
-          </button>
+            <button className="dbg-btn" onClick={onRoll}>
+                ROLL DICE
+            </button>
+            {canDoorschuiven && (
+                <button className="dbg-btn dbg-btn--ghost" onClick={onDoorschuiven}>
+                    DOORSCHUIVEN
+                </button>
+            )}
+            <button className="dbg-btn dbg-btn--ghost" onClick={onLost}>
+                Someone lost
+            </button>
         </div>
-      </div>
-  );
+    </div>
+);
 }
 function PassScreen({ name, onReady }) {
     return (
@@ -590,13 +638,9 @@ function RolledScreen({
 }
 
 function JudgeScreen({
-                         judgeName,
-                         claimOwnerName,
-                         claimValue,
-                         nextDiceCount,
-                         onBelieve,
-                         onCheck,
-                         onLost,
+                         judgeName, claimOwnerName, claimValue, nextDiceCount, beatValue,
+                         viaDoorschuiven, doorschuivenFrom,
+                         onBelieve, onCheck, onLost,
                      }) {
     return (
         <div className="dbg-screen">
@@ -604,6 +648,11 @@ function JudgeScreen({
             <div className="dbg-felt">
                 <p className="dbg-claim-hero">{claimValue}</p>
                 <p className="dbg-claim-label">believe it, or check it</p>
+                {viaDoorschuiven && (
+                    <p className="dbg-claim-hint" style={{ marginTop: 8 }}>
+                        Doorgeschoven: {doorschuivenFrom} + 1 — dice weren't rolled
+                    </p>
+                )}
             </div>
             <p className="dbg-claim-hint">
                 {nextDiceCount === 0
