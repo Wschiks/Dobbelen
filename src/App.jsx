@@ -491,38 +491,45 @@ function RolledScreen({
   const trueValue = claimNumber(roll);
   const base = activeClaim ? activeClaim.beatValue : trueValue;
 
-  const claims = validClaimsForDigits(digitCount); // ascending, legal dice numbers only
-  const firstIdx = claims.findIndex((v) => v > base);
-  const noValidRaise = firstIdx === -1;
-  const last = claims.length - 1;
+    const prevActual = activeClaim ? claimNumber(activeClaim.ownerRoll) : null;
 
-  let chipValues = [];
-  if (!noValidRaise) {
-    const remaining = last - firstIdx + 1;
-    const i1 = firstIdx;
-    const i2 = Math.min(firstIdx + 1, last);
-    const i3 = Math.min(Math.max(i2 + 1, firstIdx + Math.ceil(remaining * 0.4)), last);
-    const i4 = Math.min(Math.max(i3 + 1, firstIdx + Math.ceil(remaining * 0.75)), last);
-    chipValues = [i1, i2, i3, i4].map((idx) => claims[idx]);
-  }
+    const claims = validClaimsForDigits(digitCount); // ascending, legal dice numbers only
+    const firstIdx = claims.findIndex((v) => v > base);
+    const noValidRaise = firstIdx === -1;
+    const last = claims.length - 1;
 
-  function tapChip(val) {
-    setClaimDraft(String(val));
-    setClaimError('');
-  }
+    let chipValues = [];
+    if (!noValidRaise) {
+        const remaining = last - firstIdx + 1;
+        const i1 = firstIdx;
+        const i2 = Math.min(firstIdx + 1, last);
+        const i3 = Math.min(Math.max(i2 + 1, firstIdx + Math.ceil(remaining * 0.4)), last);
+        const i4 = Math.min(Math.max(i3 + 1, firstIdx + Math.ceil(remaining * 0.75)), last);
+        chipValues = [i1, i2, i3, i4].map((idx) => claims[idx]);
+    }
 
-  return (
-      <div className="dbg-screen">
-        <p className="dbg-eyebrow">Only {player.name} should look</p>
-        <div className="dbg-dice-row">
-          {sortedDesc.map((v, i) => (
-              <Die key={i} value={v} removed={v === 6} />
-          ))}
-        </div>
+    function tapChip(val) {
+        setClaimDraft(String(val));
+        setClaimError('');
+    }
 
-        <p className="dbg-claim-hint" style={{ marginTop: 4 }}>
-          {activeClaim ? `Beat ${activeClaim.beatValue} by:` : 'Bluff up from your roll:'}
-        </p>
+    return (
+        <div className="dbg-screen">
+            <p className="dbg-eyebrow">Only {player.name} should look</p>
+            {activeClaim && (
+                <p className="dbg-claim-hint" style={{ marginTop: -2, marginBottom: 10 }}>
+                    Vorige worp was {prevActual}
+                </p>
+            )}
+            <div className="dbg-dice-row">
+                {sortedDesc.map((v, i) => (
+                    <Die key={i} value={v} removed={v === 6} />
+                ))}
+            </div>
+
+            <p className="dbg-claim-hint" style={{ marginTop: 4 }}>
+                {activeClaim ? `Beat ${activeClaim.beatValue} by:` : 'Bluff up from your roll:'}
+            </p>
 
         <div className="dbg-chip-grid">
           {CLAIM_CHIPS.map((label, i) => {
@@ -583,7 +590,6 @@ function JudgeScreen({
                          claimOwnerName,
                          claimValue,
                          nextDiceCount,
-                         beatValue,
                          onBelieve,
                          onCheck,
                          onLost,
