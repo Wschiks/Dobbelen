@@ -174,19 +174,24 @@ export default function App() {
             return;
         }
         const val = parseInt(raw, 10);
+        const trueSixCount = countTrueSixes(currentRoll);
+        const allTrueSixes = trueSixCount === currentRoll.length; // every die this turn is a real six
+        const trueValue = claimNumber(currentRoll);
+
         const minToBeat = activeClaim ? activeClaim.beatValue : null;
-        if (minToBeat !== null && val <= minToBeat) {
+        // Normally you must strictly beat the previous claim. The one exception: if you
+        // genuinely rolled all sixes, there's nothing higher — calling it exactly as-is
+        // is allowed even if that ties whatever you needed to beat.
+        const bypassBeat = allTrueSixes && val === trueValue;
+        if (minToBeat !== null && val <= minToBeat && !bypassBeat) {
             setClaimError(`Must beat ${minToBeat}`);
             return;
         }
 
-        const trueSixCount = countTrueSixes(currentRoll);
         const restDigits = raw.split('').slice(trueSixCount).join('');
         const nextDiceCount = restDigits.length;
         const beatValue = restDigits.length ? parseInt(restDigits, 10) : null;
 
-        // Even if this claim is all sixes (nextDiceCount === 0), we still let the
-        // next player judge it — CHECK can catch a bluff before anyone is auto-out.
         setActiveClaim({
             value: val,
             ownerIdx: currentIdx,
@@ -524,31 +529,35 @@ function PassScreen({ name, onReady }) {
 }
 
 function RolledScreen({
-                        player,
-                        roll,
-                        claimDraft,
-                        setClaimDraft,
-                        claimError,
-                        setClaimError,
-                        activeClaim,
-                        onConfirm,
-                        onLost,
+                          player,
+                          roll,
+                          claimDraft,
+                          setClaimDraft,
+                          claimError,
+                          setClaimError,
+                          activeClaim,
+                          onConfirm,
+                          onLost,
                       }) {
-  const sortedDesc = [...roll].sort((a, b) => b - a);
-  const digitCount = roll.length;
-  const trueValue = claimNumber(roll);
-  const base = activeClaim ? activeClaim.beatValue : trueValue;
+    const sortedDesc = [...roll].sort((a, b) => b - a);
+    const digitCount = roll.length;
+    const trueValue = claimNumber(roll);
+    const base = activeClaim ? activeClaim.beatValue : trueValue;
+    const trueSixCount = countTrueSixes(roll);
+    const allTrueSixes = trueSixCount === digitCount; // every die this turn is really a six
 
     const prevActual = activeClaim ? claimNumber(activeClaim.ownerRoll) : null;
     const prevWasBluff = activeClaim ? prevActual !== activeClaim.value : false;
 
-    const claims = validClaimsForDigits(digitCount); // ascending, legal dice numbers only
+    const claims = validClaimsForDigits(digitCount);
     const firstIdx = claims.findIndex((v) => v > base);
-    const noValidRaise = firstIdx === -1;
+    const noStrictRaise = firstIdx === -1;
+    // Rolling all sixes IS the legal claim when nothing can beat it — don't block it.
+    const noValidRaise = noStrictRaise && !allTrueSixes;
     const last = claims.length - 1;
 
     let chipValues = [];
-    if (!noValidRaise) {
+    if (!noStrictRaise) {
         const remaining = last - firstIdx + 1;
         const i1 = firstIdx;
         const i2 = Math.min(firstIdx + 1, last);
@@ -580,61 +589,73 @@ function RolledScreen({
             </div>
 
             <p className="dbg-claim-hint" style={{ marginTop: 4 }}>
-                {activeClaim ? `Beat ${activeClaim.beatValue} by:` : 'Bluff up from your roll:'}
+                {allTrueSixes
+                    ? 'Nothing beats this — call it:'
+                    : activeClaim
+                        ? `Beat ${activeClaim.beatValue} by:`
+                        : 'Bluff up from your roll:'}
             </p>
 
-        <div className="dbg-chip-grid">
-          {CLAIM_CHIPS.map((label, i) => {
-            const val = chipValues[i];
-            const disabled = noValidRaise || val === undefined || (i > 0 && val === chipValues[i - 1]);
-            const selected = !disabled && String(val) === claimDraft;
-            return (
-                <button
-                    key={label}
-                    className={`dbg-chip${selected ? ' dbg-chip--selected' : ''}`}
-                    disabled={disabled}
-                    onClick={() => val !== undefined && tapChip(val)}
-                >
-                  <span className="dbg-chip-label">{label}</span>
-                  <span className="dbg-chip-value">{val !== undefined ? val : '—'}</span>
+            {!allTrueSixes && (
+                <div className="dbg-chip-grid">
+                    {CLAIM_CHIPS.map((label, i) => {
+                        const val = chipValues[i];
+                        const disabled = noValidRaise || val === undefined || (i > 0 && val === chipValues[i - 1]);
+                        const selected = !disabled && String(val) === claimDraft;
+                        return (
+                            <button
+                                key={label}
+                                className={`dbg-chip${selected ? ' dbg-chip--selected' : ''}`}
+                                disabled={disabled}
+                                onClick={() => val !== undefined && tapChip(val)}
+                            >
+                                <span className="dbg-chip-label">{label}</span>
+                                <span className="dbg-chip-value">{val !== undefined ? val : '—'}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            {allTrueSixes && (
+                <p className="dbg-claim-hint" style={{ color: 'var(--gold)' }}>
+                    All {digitCount === 1 ? 'die is' : 'dice are'} really sixes — the max. Claim {trueValue} and pass it on.
+                </p>
+            )}
+
+            {noValidRaise && (
+                <p className="dbg-claim-hint dbg-claim-hint--error">
+                    No legal claim with {digitCount} {digitCount === 1 ? 'die' : 'dice'} beats {base} — try "Someone lost".
+                </p>
+            )}
+
+            <div className="dbg-claim-input-wrap">
+                <input
+                    className="dbg-claim-input"
+                    type="number"
+                    inputMode="numeric"
+                    value={claimDraft}
+                    onChange={(e) => {
+                        setClaimDraft(e.target.value);
+                        setClaimError('');
+                    }}
+                />
+                <p className={`dbg-claim-hint${claimError ? ' dbg-claim-hint--error' : ''}`}>
+                    {claimError || (activeClaim ? `Must beat ${activeClaim.beatValue}` : 'Or type your own claim')}
+                </p>
+            </div>
+
+            <div className="dbg-spacer" />
+            <div className="dbg-actions">
+                <button className="dbg-btn" disabled={noValidRaise} onClick={onConfirm}>
+                    CLAIM & PASS
                 </button>
-            );
-          })}
+                <button className="dbg-btn dbg-btn--ghost" onClick={onLost}>
+                    Someone lost
+                </button>
+            </div>
         </div>
-
-        {noValidRaise && (
-            <p className="dbg-claim-hint dbg-claim-hint--error">
-              No legal claim with {digitCount} {digitCount === 1 ? 'die' : 'dice'} beats {base} — try "Someone lost".
-            </p>
-        )}
-
-        <div className="dbg-claim-input-wrap">
-          <input
-              className="dbg-claim-input"
-              type="number"
-              inputMode="numeric"
-              value={claimDraft}
-              onChange={(e) => {
-                setClaimDraft(e.target.value);
-                setClaimError('');
-              }}
-          />
-          <p className={`dbg-claim-hint${claimError ? ' dbg-claim-hint--error' : ''}`}>
-            {claimError || (activeClaim ? `Must beat ${activeClaim.beatValue}` : 'Or type your own claim')}
-          </p>
-        </div>
-
-        <div className="dbg-spacer" />
-        <div className="dbg-actions">
-          <button className="dbg-btn" disabled={noValidRaise} onClick={onConfirm}>
-            CLAIM & PASS
-          </button>
-          <button className="dbg-btn dbg-btn--ghost" onClick={onLost}>
-            Someone lost
-          </button>
-        </div>
-      </div>
-  );
+    );
 }
 
 function JudgeScreen({
@@ -743,6 +764,7 @@ function RevealScreen({
     const wasBluff = actual < claimValue;
     const sortedDesc = [...ownerRoll].sort((a, b) => b - a);
     const loserIdx = wasBluff ? claimOwnerIdx : judgeIdx;
+    const allSixes = ownerRoll.every((v) => v === 6);
 
     const displayPlayers = players.map((p, i) =>
         i === loserIdx ? { ...p, losses: p.losses + 1 } : p
@@ -750,6 +772,7 @@ function RevealScreen({
 
     return (
         <div className="dbg-screen">
+            {allSixes && <div className="dbg-out-banner">PIIIIEEEEEEUUUUWW — really all sixes</div>}
             <p className="dbg-eyebrow">{claimOwnerName}'s actual dice</p>
             <div className="dbg-dice-row">
                 {sortedDesc.map((v, i) => (
@@ -783,24 +806,24 @@ function RevealScreen({
 }
 
 function AutoOutScreen({ info, onContinue }) {
-  return (
-      <div className="dbg-screen">
-        <div className="dbg-out-banner">All sixes, no mercy</div>
-        <div className="dbg-felt">
-          <p className="dbg-sub" style={{ marginBottom: 6 }}>
-            {info.claimOwnerName} claimed {info.claimValue} — nothing left after the sixes.
-          </p>
-          <p className="dbg-title" style={{ fontSize: 26 }}>{info.outName} is out</p>
-          <p className="dbg-sub" style={{ marginBottom: 0 }}>Play resumes after them.</p>
+    return (
+        <div className="dbg-screen">
+            <div className="dbg-out-banner">PIIIIEEEEEEUUUUWW — all sixes, no mercy</div>
+            <div className="dbg-felt">
+                <p className="dbg-sub" style={{ marginBottom: 6 }}>
+                    {info.claimOwnerName} claimed {info.claimValue} — nothing left after the sixes.
+                </p>
+                <p className="dbg-title" style={{ fontSize: 26 }}>{info.outName} is out</p>
+                <p className="dbg-sub" style={{ marginBottom: 0 }}>Play resumes after them.</p>
+            </div>
+            <div className="dbg-spacer" />
+            <div className="dbg-actions">
+                <button className="dbg-btn" onClick={onContinue}>
+                    CONTINUE
+                </button>
+            </div>
         </div>
-        <div className="dbg-spacer" />
-        <div className="dbg-actions">
-          <button className="dbg-btn" onClick={onContinue}>
-            CONTINUE
-          </button>
-        </div>
-      </div>
-  );
+    );
 }
 
 function LostSelectScreen({ players, targetLosses, onSelect }) {
