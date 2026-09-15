@@ -506,9 +506,6 @@ return (
                     DOORSCHUIVEN
                 </button>
             )}
-            <button className="dbg-btn dbg-btn--ghost" onClick={onLost}>
-                Someone lost
-            </button>
         </div>
     </div>
 );
@@ -649,9 +646,6 @@ function RolledScreen({
             <div className="dbg-actions">
                 <button className="dbg-btn" disabled={noValidRaise} onClick={onConfirm}>
                     CLAIM & PASS
-                </button>
-                <button className="dbg-btn dbg-btn--ghost" onClick={onLost}>
-                    Someone lost
                 </button>
             </div>
         </div>
