@@ -65,7 +65,7 @@ function countTrueSixes(diceArr) {
 // increments the rightmost digit that's still allowed to go up
 // while staying a legal non-increasing dice number, e.g. 432 -> 433, 433 -> 443
 // returns null if already maxed out (e.g. 666)
-function nextDoorschuivenValue(numStr) {
+function nextPushValue(numStr) {
     const digits = numStr.split('').map(Number);
     for (let i = digits.length - 1; i >= 0; i--) {
         const leftBound = i === 0 ? 6 : digits[i - 1];
@@ -86,7 +86,7 @@ export default function App() {
 
   // ----- game state -----
   const [phase, setPhase] = useState('setup');
-  // phase: setup | pass | roll | rolled | judge | reveal | lost-select | auto-out | game-over
+  // phase: setup | pass | roll | rolled | judge | reveal | auto-out | game-over
 
   const [gamePlayers, setGamePlayers] = useState([]); // [{ name }]
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -96,7 +96,8 @@ export default function App() {
   const [claimDraft, setClaimDraft] = useState('');
   const [claimError, setClaimError] = useState('');
 
-  // { value, ownerIdx, ownerRoll, beatValue, nextDiceCount }
+  // { value, ownerIdx, ownerRoll, beatValue, nextDiceCount, pushType, pushFrom }
+  // pushType: 'doorschuiven' | 'blind' | undefined — set when the claim was pushed on without looking
   // value: the full number announced. beatValue/nextDiceCount: what's left
   // after stripping leading 6s — what the next roller must beat, and with how many dice.
   const [activeClaim, setActiveClaim] = useState(null);
@@ -220,32 +221,39 @@ export default function App() {
         setDiceThisTurn(activeClaim.nextDiceCount);
         setPhase('roll');
     }
-    function doorschuiven() {
-        const beatStr = String(activeClaim.beatValue);
-        const newVal = nextDoorschuivenValue(beatStr);
-        if (newVal === null) return; // shouldn't happen if button is disabled correctly
-
-        // If the claim we're building on was itself a blind push-through, nobody
-        // has looked at dice since that hidden roll — carry it forward untouched.
-        // Otherwise this is the FIRST schuifdoor in the chain: roll fresh dice now,
-        // but the current player never looks at the result.
-        const hiddenRoll = activeClaim.viaDoorschuiven
-            ? activeClaim.ownerRoll
-            : rollDice(diceThisTurn, isUnlucky(current.name));
+    // Shared by Doorschuiven and Blind: previous count + 1, passed straight to the next player.
+    function pushOn(pushType, ownerRoll) {
+        const newVal = nextPushValue(String(activeClaim.beatValue));
+        if (newVal === null) return; // shouldn't happen if the buttons are hidden correctly
 
         setActiveClaim({
             value: newVal,
             ownerIdx: currentIdx,
-            ownerRoll: hiddenRoll,
+            ownerRoll,
             beatValue: newVal,
-            nextDiceCount: diceThisTurn, // unseen dice, so digit count carries over unchanged
-            viaDoorschuiven: true,
-            doorschuivenFrom: activeClaim.beatValue,
+            nextDiceCount: diceThisTurn, // digit count carries over unchanged
+            pushType,
+            pushFrom: activeClaim.beatValue,
         });
         const nextIdx = (currentIdx + 1) % gamePlayers.length;
         setCurrentIdx(nextIdx);
         setPassTarget({ name: gamePlayers[nextIdx].name, next: 'judge' });
         setPhase('pass');
+    }
+
+    // Doorschuiven: +1 and pass it on without rolling. Nobody has new dice, so a check
+    // reveals the dice already in play — after a normal claim that's the claimer's roll
+    // minus its real sixes (those dice are out, so what's left matches the digit count).
+    function doorschuiven() {
+        const ownerRoll = activeClaim.pushType
+            ? activeClaim.ownerRoll
+            : activeClaim.ownerRoll.filter((v) => v !== 6);
+        pushOn('doorschuiven', ownerRoll);
+    }
+
+    // Blind: +1, but fresh dice are rolled that the current player never looks at.
+    function blind() {
+        pushOn('blind', rollDice(diceThisTurn, isUnlucky(current.name)));
     }
   function check() {
     setPhase('reveal');
@@ -257,14 +265,6 @@ export default function App() {
 
   function continueFromReveal(loserIdx) {
     recordLoss(loserIdx);
-  }
-
-  function openLostSelect() {
-    setPhase('lost-select');
-  }
-
-  function selectLoser(idx) {
-    recordLoss(idx);
   }
 
   function recordLoss(idx) {
@@ -298,7 +298,7 @@ export default function App() {
 
     return (
         <div className="dbg-app">
-            {['roll', 'rolled', 'judge', 'reveal', 'auto-out', 'lost-select'].includes(phase) && (
+            {['roll', 'rolled', 'judge', 'reveal', 'auto-out'].includes(phase) && (
                 <BurgerMenu
                     open={menuOpen}
                     onToggle={() => setMenuOpen((o) => !o)}
@@ -338,9 +338,9 @@ export default function App() {
                 player={current}
                 diceCount={diceThisTurn}
                 onRoll={handleRoll}
-                onLost={openLostSelect}
-                canDoorschuiven={!!activeClaim && nextDoorschuivenValue(String(activeClaim.beatValue)) !== null}
+                canPush={!!activeClaim && activeClaim.beatValue !== null && nextPushValue(String(activeClaim.beatValue)) !== null}
                 onDoorschuiven={doorschuiven}
+                onBlind={blind}
             />
         )}
 
@@ -354,7 +354,7 @@ export default function App() {
                 setClaimError={setClaimError}
                 activeClaim={activeClaim}
                 onConfirm={confirmClaim}
-                onLost={openLostSelect}
+                onOut={() => recordLoss(currentIdx)}
             />
         )}
 
@@ -365,11 +365,10 @@ export default function App() {
                 claimValue={activeClaim.value}
                 nextDiceCount={activeClaim.nextDiceCount}
                 beatValue={activeClaim.beatValue}
-                viaDoorschuiven={activeClaim.viaDoorschuiven}
-                doorschuivenFrom={activeClaim.doorschuivenFrom}
+                pushType={activeClaim.pushType}
+                pushFrom={activeClaim.pushFrom}
                 onBelieve={believe}
                 onCheck={check}
-                onLost={openLostSelect}
             />
         )}
 
@@ -388,10 +387,6 @@ export default function App() {
 
         {phase === 'auto-out' && autoOutInfo && (
             <AutoOutScreen info={autoOutInfo} onContinue={continueFromAutoOut} />
-        )}
-
-        {phase === 'lost-select' && (
-            <LostSelectScreen players={gamePlayers} targetLosses={targetLosses} onSelect={selectLoser} />
         )}
 
         {phase === 'game-over' && gameOverInfo && (
@@ -487,7 +482,7 @@ function SetupScreen({
     );
 }
 
-function RollScreen({ player, diceCount, onRoll, onLost, canDoorschuiven, onDoorschuiven }) {
+function RollScreen({ player, diceCount, onRoll, canPush, onDoorschuiven, onBlind }) {
 return (
     <div className="dbg-screen">
         <div className="dbg-felt">
@@ -501,10 +496,15 @@ return (
             <button className="dbg-btn" onClick={onRoll}>
                 ROLL DICE
             </button>
-            {canDoorschuiven && (
-                <button className="dbg-btn dbg-btn--ghost" onClick={onDoorschuiven}>
-                    DOORSCHUIVEN
-                </button>
+            {canPush && (
+                <>
+                    <button className="dbg-btn dbg-btn--ghost" onClick={onDoorschuiven}>
+                        DOORSCHUIVEN
+                    </button>
+                    <button className="dbg-btn dbg-btn--ghost" onClick={onBlind}>
+                        BLIND
+                    </button>
+                </>
             )}
         </div>
     </div>
@@ -534,7 +534,7 @@ function RolledScreen({
                           setClaimError,
                           activeClaim,
                           onConfirm,
-                          onLost,
+                          onOut,
                       }) {
     const sortedDesc = [...roll].sort((a, b) => b - a);
     const digitCount = roll.length;
@@ -622,7 +622,7 @@ function RolledScreen({
 
             {noValidRaise && (
                 <p className="dbg-claim-hint dbg-claim-hint--error">
-                    No legal claim with {digitCount} {digitCount === 1 ? 'die' : 'dice'} beats {base} — try "Someone lost".
+                    No legal claim with {digitCount} {digitCount === 1 ? 'die' : 'dice'} beats {base} — you're out.
                 </p>
             )}
 
@@ -644,9 +644,15 @@ function RolledScreen({
 
             <div className="dbg-spacer" />
             <div className="dbg-actions">
-                <button className="dbg-btn" disabled={noValidRaise} onClick={onConfirm}>
-                    CLAIM & PASS
-                </button>
+                {noValidRaise ? (
+                    <button className="dbg-btn dbg-btn--red" onClick={onOut}>
+                        I'M OUT
+                    </button>
+                ) : (
+                    <button className="dbg-btn" onClick={onConfirm}>
+                        CLAIM & PASS
+                    </button>
+                )}
             </div>
         </div>
     );
@@ -654,8 +660,8 @@ function RolledScreen({
 
 function JudgeScreen({
                          judgeName, claimOwnerName, claimValue, nextDiceCount, beatValue,
-                         viaDoorschuiven, doorschuivenFrom,
-                         onBelieve, onCheck, onLost,
+                         pushType, pushFrom,
+                         onBelieve, onCheck,
                      }) {
     return (
         <div className="dbg-screen">
@@ -663,9 +669,14 @@ function JudgeScreen({
             <div className="dbg-felt">
                 <p className="dbg-claim-hero">{claimValue}</p>
                 <p className="dbg-claim-label">believe it, or check it</p>
-                {viaDoorschuiven && (
+                {pushType === 'doorschuiven' && (
                     <p className="dbg-claim-hint" style={{ marginTop: 8 }}>
-                        Doorgeschoven: {doorschuivenFrom} + 1 — dice weren't rolled
+                        Doorgeschoven: {pushFrom} + 1 — dice weren't rolled
+                    </p>
+                )}
+                {pushType === 'blind' && (
+                    <p className="dbg-claim-hint" style={{ marginTop: 8 }}>
+                        Blind: {pushFrom} + 1 — rolled without looking
                     </p>
                 )}
             </div>
@@ -681,9 +692,6 @@ function JudgeScreen({
                 </button>
                 <button className="dbg-btn dbg-btn--red" onClick={onCheck}>
                     CHECK
-                </button>
-                <button className="dbg-btn dbg-btn--ghost" onClick={onLost}>
-                    Someone lost
                 </button>
             </div>
         </div>
@@ -818,26 +826,6 @@ function AutoOutScreen({ info, onContinue }) {
             </div>
         </div>
     );
-}
-
-function LostSelectScreen({ players, targetLosses, onSelect }) {
-  return (
-      <div className="dbg-screen">
-        <p className="dbg-eyebrow">Round over</p>
-        <h1 className="dbg-title">Who lost?</h1>
-        <p className="dbg-sub">{targetLosses} losses and you're out of the game.</p>
-        <div className="dbg-lost-list">
-          {players.map((p, i) => (
-              <button key={i} onClick={() => onSelect(i)}>
-                <span>{p.name}</span>
-                <span className="dbg-lost-count">
-              {p.losses}/{targetLosses}
-            </span>
-              </button>
-          ))}
-        </div>
-      </div>
-  );
 }
 
 function GameOverScreen({ info, targetLosses, players, onPlayAgain }) {

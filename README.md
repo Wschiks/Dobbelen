@@ -208,30 +208,19 @@ The next player is immediately out.
 
 ## Losing
 
-There should be a simple **`LOST`** button available during the game.
+There is no manual **`LOST`** button. Losses are recorded automatically from the
+check / believe outcomes described above.
 
-The app should **not try to determine who lost automatically**.
+---
 
-The players themselves decide who lost.
+## Doorschuiven and Blind
 
-When someone loses, the current player can press:
+On the roll screen (when there is a previous claim that can still be raised) the
+player can push the claim on instead of rolling:
 
-**`LOST`**
+**`DOORSCHUIVEN`**: previous count + 1. Nobody rolls; the claim just goes to the next player.
 
-Then the app should provide a very simple way to select the player who lost.
-
-For example:
-
-> **Who lost?**
-
-`Wout`
-`Jasper`
-`Daan`
-`Tim`
-
-After selecting the player, the game continues to the next round according to the rules.
-
-The exact behavior after someone loses can be decided later.
+**`BLIND`**: previous count + 1, but the dice are rolled again. The player never looks at them.
 
 ---
 

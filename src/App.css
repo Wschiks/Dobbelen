@@ -389,36 +389,6 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* ---------- Who lost list ---------- */
-
-.dbg-lost-list button {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  text-align: left;
-  background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: 10px;
-  padding: 16px 18px;
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 17px;
-  font-weight: 600;
-  margin-bottom: 10px;
-  cursor: pointer;
-}
-.dbg-lost-list button:active {
-  border-color: var(--red);
-  background: var(--surface-raised);
-}
-
-.dbg-lost-count {
-  color: var(--text-dim);
-  font-size: 14px;
-  font-weight: 500;
-}
-
 /* ---------- Losses stepper (setup) ---------- */
 
 .dbg-stepper-row {
