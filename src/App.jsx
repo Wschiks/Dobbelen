@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Die from './Dice';
 import './App.css';
 import logo from './assets/logodob.png';
+import { useT } from './i18n/context';
+import { InfoPage } from './InfoPages';
+import { usePage } from './usePage';
 
 // ---------- helpers ----------
 
@@ -27,7 +30,7 @@ function claimNumber(diceArr) {
   return parseInt([...diceArr].sort((a, b) => b - a).join(''), 10);
 }
 
-const CLAIM_CHIPS = ['1 higher', '2 higher', 'A lot higher', 'Even more higher'];
+const CLAIM_CHIPS = ['rolled.chip1', 'rolled.chip2', 'rolled.chip3', 'rolled.chip4'];
 
 // all numbers representable by `n` dice: digits 1-6, non-increasing
 // (i.e. always expressed the way you'd naturally read dice: highest digit first)
@@ -79,10 +82,40 @@ function nextPushValue(numStr) {
 
 const emptyPlayer = () => ({ name: '' });
 
+// remember the table between visits so nobody retypes names every game
+const SETUP_KEY = 'dobbel-setup';
+
+function loadSetup() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(SETUP_KEY));
+        const names = Array.isArray(saved?.names) ? saved.names.filter((n) => typeof n === 'string') : [];
+        const losses = Number.isInteger(saved?.targetLosses) && saved.targetLosses >= 1 ? saved.targetLosses : 3;
+        return {
+            players: names.length >= 2 ? names.map((name) => ({ name })) : [emptyPlayer(), emptyPlayer()],
+            targetLosses: losses,
+        };
+    } catch {
+        return { players: [emptyPlayer(), emptyPlayer()], targetLosses: 3 };
+    }
+}
+
+function saveSetup(players, targetLosses) {
+    try {
+        localStorage.setItem(SETUP_KEY, JSON.stringify({ names: players.map((p) => p.name), targetLosses }));
+    } catch {
+        // storage unavailable (private mode etc.) — not worth surfacing
+    }
+}
+
+function buzz(ms = 25) {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(ms);
+}
+
 export default function App() {
   // ----- setup state -----
-  const [players, setPlayers] = useState([emptyPlayer(), emptyPlayer()]);
-  const [targetLosses, setTargetLosses] = useState(3);
+  const [saved] = useState(loadSetup);
+  const [players, setPlayers] = useState(saved.players);
+  const [targetLosses, setTargetLosses] = useState(saved.targetLosses);
 
   // ----- game state -----
   const [phase, setPhase] = useState('setup');
@@ -106,18 +139,12 @@ export default function App() {
   const [autoOutInfo, setAutoOutInfo] = useState(null); // { claimOwnerName, claimValue, outName, outIdx }
   const [gameOverInfo, setGameOverInfo] = useState(null); // { name, losses }
 
+    const [page, goPage] = usePage();
+    const { t } = useT();
     const [menuOpen, setMenuOpen] = useState(false);
     const [scoreOpen, setScoreOpen] = useState(false);
 
   const current = gamePlayers[currentIdx];
-
-  // prefill claim draft with the true value whenever a fresh roll lands
-  useEffect(() => {
-    if (phase === 'rolled' && currentRoll.length) {
-      setClaimDraft(String(claimNumber(currentRoll)));
-      setClaimError('');
-    }
-  }, [phase, currentRoll]);
 
   // ---------- setup screen ----------
 
@@ -140,6 +167,7 @@ export default function App() {
   function startGame() {
     const names = players.map((p) => p.name.trim()).filter(Boolean);
     if (names.length < 2) return;
+    saveSetup(players, targetLosses);
     const initial = names.map((name) => ({ name, losses: 0 }));
     setGamePlayers(initial);
     setActiveClaim(null);
@@ -163,7 +191,12 @@ export default function App() {
     }
 
     function handleRoll() {
-        setCurrentRoll(rollDice(diceThisTurn, isUnlucky(current.name)));
+        const roll = rollDice(diceThisTurn, isUnlucky(current.name));
+        setCurrentRoll(roll);
+        // prefill the claim with the true value
+        setClaimDraft(String(claimNumber(roll)));
+        setClaimError('');
+        buzz();
         setPhase('rolled');
     }
 
@@ -171,7 +204,7 @@ export default function App() {
         const raw = claimDraft.trim();
         const digitCount = currentRoll.length;
         if (!isLegalClaimShape(raw, digitCount)) {
-            setClaimError(`Enter a ${digitCount}-digit dice number (digits 1-6, high to low)`);
+            setClaimError({ key: 'rolled.errorShape', vars: { n: digitCount } });
             return;
         }
         const val = parseInt(raw, 10);
@@ -185,7 +218,7 @@ export default function App() {
         // is allowed even if that ties whatever you needed to beat.
         const bypassBeat = allTrueSixes && val === trueValue;
         if (minToBeat !== null && val <= minToBeat && !bypassBeat) {
-            setClaimError(`Must beat ${minToBeat}`);
+            setClaimError({ key: 'rolled.mustBeat', vars: { value: minToBeat } });
             return;
         }
 
@@ -256,6 +289,7 @@ export default function App() {
         pushOn('blind', rollDice(diceThisTurn, isUnlucky(current.name)));
     }
   function check() {
+    buzz(40);
     setPhase('reveal');
   }
 
@@ -296,6 +330,14 @@ export default function App() {
     }
   // ---------- render ----------
 
+    if (page) {
+        return (
+            <div className="dbg-app">
+                <InfoPage page={page} go={goPage} />
+            </div>
+        );
+    }
+
     return (
         <div className="dbg-app">
             {['roll', 'rolled', 'judge', 'reveal', 'auto-out'].includes(phase) && (
@@ -304,6 +346,7 @@ export default function App() {
                     onToggle={() => setMenuOpen((o) => !o)}
                     onShowScore={() => { setScoreOpen(true); setMenuOpen(false); }}
                     onMainMenu={backToMenu}
+                    onSettings={() => { setMenuOpen(false); goPage('settings'); }}
                 />
             )}
 
@@ -313,6 +356,16 @@ export default function App() {
                     targetLosses={targetLosses}
                     onClose={() => setScoreOpen(false)}
                 />
+            )}
+
+            {phase === 'setup' && (
+                <button
+                    className="dbg-burger dbg-burger--icon"
+                    aria-label={t('settings.open')}
+                    onClick={() => goPage('settings')}
+                >
+                    ⚙
+                </button>
             )}
 
             {phase === 'setup' && (
@@ -364,7 +417,6 @@ export default function App() {
                 claimOwnerName={gamePlayers[activeClaim.ownerIdx].name}
                 claimValue={activeClaim.value}
                 nextDiceCount={activeClaim.nextDiceCount}
-                beatValue={activeClaim.beatValue}
                 pushType={activeClaim.pushType}
                 pushFrom={activeClaim.pushFrom}
                 onBelieve={believe}
@@ -412,13 +464,14 @@ function SetupScreen({
                          targetLosses,
                          adjustTargetLosses,
                      }) {
+    const { t } = useT();
     const validCount = players.map((p) => p.name.trim()).filter(Boolean).length;
     return (
         <div className="dbg-screen dbg-screen--center">
             <div className="dbg-setup-card">
                 <img src={logo} alt="Dobbelen" className="dbg-logo" />
                 <h1 className="dbg-title dbg-title--center">Dobbelen</h1>
-                <p className="dbg-sub dbg-sub--center">Add everyone at the table, then start.</p>
+                <p className="dbg-sub dbg-sub--center">{t('setup.subtitle')}</p>
 
                 <div className="dbg-players-list">
                     {players.map((p, i) => (
@@ -427,14 +480,14 @@ function SetupScreen({
                             <input
                                 className="dbg-input"
                                 type="text"
-                                placeholder={`Player ${i + 1}`}
+                                placeholder={t('setup.playerPlaceholder', { n: i + 1 })}
                                 value={p.name}
                                 onChange={(e) => updatePlayerName(i, e.target.value)}
                             />
                             {players.length > 2 && (
                                 <button
                                     className="dbg-remove"
-                                    aria-label="Remove player"
+                                    aria-label={t('setup.removePlayer')}
                                     onClick={() => removePlayer(i)}
                                 >
                                     ×
@@ -445,15 +498,15 @@ function SetupScreen({
                 </div>
 
                 <button className="dbg-btn dbg-btn--ghost" onClick={addPlayer}>
-                    + Add player
+                    {t('setup.addPlayer')}
                 </button>
 
                 <div className="dbg-stepper-row">
-                    <span className="dbg-stepper-label">Losses to end the game</span>
+                    <span className="dbg-stepper-label">{t('setup.targetLosses')}</span>
                     <div className="dbg-stepper">
                         <button
                             className="dbg-stepper-btn"
-                            aria-label="Fewer losses"
+                            aria-label={t('setup.fewerLosses')}
                             onClick={() => adjustTargetLosses(-1)}
                         >
                             −
@@ -461,7 +514,7 @@ function SetupScreen({
                         <span className="dbg-stepper-value">{targetLosses}</span>
                         <button
                             className="dbg-stepper-btn"
-                            aria-label="More losses"
+                            aria-label={t('setup.moreLosses')}
                             onClick={() => adjustTargetLosses(1)}
                         >
                             +
@@ -472,10 +525,10 @@ function SetupScreen({
 
             <div className="dbg-actions dbg-actions--static">
                 <button className="dbg-btn" disabled={validCount < 2} onClick={startGame}>
-                    START GAME
+                    {t('setup.start')}
                 </button>
                 {validCount < 2 && (
-                    <p className="dbg-claim-hint">Need at least 2 named players</p>
+                    <p className="dbg-claim-hint">{t('setup.needTwo')}</p>
                 )}
             </div>
         </div>
@@ -483,26 +536,27 @@ function SetupScreen({
 }
 
 function RollScreen({ player, diceCount, onRoll, canPush, onDoorschuiven, onBlind }) {
+const { t } = useT();
 return (
     <div className="dbg-screen">
         <div className="dbg-felt">
             <p className="dbg-player-name">{player.name}</p>
             <p className="dbg-dice-count">
-                {diceCount} {diceCount === 1 ? 'die' : 'dice'} in the cup
+                {t('roll.diceInCup', { count: diceCount, n: diceCount })}
             </p>
         </div>
         <div className="dbg-spacer" />
         <div className="dbg-actions">
             <button className="dbg-btn" onClick={onRoll}>
-                ROLL DICE
+                {t('roll.rollDice')}
             </button>
             {canPush && (
                 <>
                     <button className="dbg-btn dbg-btn--ghost" onClick={onDoorschuiven}>
-                        DOORSCHUIVEN
+                        {t('roll.doorschuiven')}
                     </button>
                     <button className="dbg-btn dbg-btn--ghost" onClick={onBlind}>
-                        BLIND
+                        {t('roll.blind')}
                     </button>
                 </>
             )}
@@ -511,14 +565,15 @@ return (
 );
 }
 function PassScreen({ name, onReady }) {
+    const { t } = useT();
     return (
         <div className="dbg-pass">
             <img src={logo} alt="Dobbelen" className="dbg-logo dbg-logo--pass" />
-            <p className="dbg-eyebrow">Pass the phone to</p>
+            <p className="dbg-eyebrow">{t('pass.eyebrow')}</p>
             <h1 className="dbg-title">{name}</h1>
             <div style={{ width: '100%', marginTop: 24 }}>
                 <button className="dbg-btn" onClick={onReady}>
-                    I'M READY
+                    {t('pass.ready')}
                 </button>
             </div>
         </div>
@@ -536,6 +591,7 @@ function RolledScreen({
                           onConfirm,
                           onOut,
                       }) {
+    const { t } = useT();
     const sortedDesc = [...roll].sort((a, b) => b - a);
     const digitCount = roll.length;
     const trueValue = claimNumber(roll);
@@ -570,27 +626,27 @@ function RolledScreen({
 
     return (
         <div className="dbg-screen">
-            <p className="dbg-eyebrow">Only {player.name} should look</p>
+            <p className="dbg-eyebrow">{t('rolled.onlyLook', { name: player.name })}</p>
             {activeClaim && (
                 <p className="dbg-claim-hint" style={{ marginTop: -2, marginBottom: 10 }}>
-                    Vorige worp was {prevActual}
+                    {t('rolled.previousRoll', { n: prevActual })}
                     {prevWasBluff && (
-                        <span style={{ color: 'var(--red)' }}> (claimed {activeClaim.value} — bluff!)</span>
+                        <span style={{ color: 'var(--red)' }}> ({t('rolled.bluff', { value: activeClaim.value })})</span>
                     )}
                 </p>
             )}
             <div className="dbg-dice-row">
                 {sortedDesc.map((v, i) => (
-                    <Die key={i} value={v} removed={v === 6} />
+                    <Die key={i} value={v} removed={v === 6} tumble />
                 ))}
             </div>
 
             <p className="dbg-claim-hint" style={{ marginTop: 4 }}>
                 {allTrueSixes
-                    ? 'Nothing beats this — call it:'
+                    ? t('rolled.nothingBeats')
                     : activeClaim
-                        ? `Beat ${activeClaim.beatValue} by:`
-                        : 'Bluff up from your roll:'}
+                        ? t('rolled.beatBy', { value: activeClaim.beatValue })
+                        : t('rolled.bluffUp')}
             </p>
 
             {!allTrueSixes && (
@@ -606,7 +662,7 @@ function RolledScreen({
                                 disabled={disabled}
                                 onClick={() => val !== undefined && tapChip(val)}
                             >
-                                <span className="dbg-chip-label">{label}</span>
+                                <span className="dbg-chip-label">{t(label)}</span>
                                 <span className="dbg-chip-value">{val !== undefined ? val : '—'}</span>
                             </button>
                         );
@@ -616,13 +672,13 @@ function RolledScreen({
 
             {allTrueSixes && (
                 <p className="dbg-claim-hint" style={{ color: 'var(--gold)' }}>
-                    All {digitCount === 1 ? 'die is' : 'dice are'} really sixes — the max. Claim {trueValue} and pass it on.
+                    {t('rolled.allSixes', { count: digitCount, value: trueValue })}
                 </p>
             )}
 
             {noValidRaise && (
                 <p className="dbg-claim-hint dbg-claim-hint--error">
-                    No legal claim with {digitCount} {digitCount === 1 ? 'die' : 'dice'} beats {base} — you're out.
+                    {t('rolled.noLegal', { count: digitCount, n: digitCount, base })}
                 </p>
             )}
 
@@ -638,7 +694,11 @@ function RolledScreen({
                     }}
                 />
                 <p className={`dbg-claim-hint${claimError ? ' dbg-claim-hint--error' : ''}`}>
-                    {claimError || (activeClaim ? `Must beat ${activeClaim.beatValue}` : 'Or type your own claim')}
+                    {claimError
+                        ? t(claimError.key, claimError.vars)
+                        : activeClaim
+                            ? t('rolled.mustBeat', { value: activeClaim.beatValue })
+                            : t('rolled.ownClaim')}
                 </p>
             </div>
 
@@ -646,11 +706,11 @@ function RolledScreen({
             <div className="dbg-actions">
                 {noValidRaise ? (
                     <button className="dbg-btn dbg-btn--red" onClick={onOut}>
-                        I'M OUT
+                        {t('rolled.imOut')}
                     </button>
                 ) : (
                     <button className="dbg-btn" onClick={onConfirm}>
-                        CLAIM & PASS
+                        {t('rolled.claimPass')}
                     </button>
                 )}
             </div>
@@ -659,39 +719,38 @@ function RolledScreen({
 }
 
 function JudgeScreen({
-                         judgeName, claimOwnerName, claimValue, nextDiceCount, beatValue,
+                         judgeName, claimOwnerName, claimValue, nextDiceCount,
                          pushType, pushFrom,
                          onBelieve, onCheck,
                      }) {
+    const { t } = useT();
     return (
         <div className="dbg-screen">
-            <p className="dbg-eyebrow">{judgeName}, {claimOwnerName} claims</p>
+            <p className="dbg-eyebrow">{t('judge.claims', { judge: judgeName, owner: claimOwnerName })}</p>
             <div className="dbg-felt">
                 <p className="dbg-claim-hero">{claimValue}</p>
-                <p className="dbg-claim-label">believe it, or check it</p>
+                <p className="dbg-claim-label">{t('judge.believeOrCheck')}</p>
                 {pushType === 'doorschuiven' && (
                     <p className="dbg-claim-hint" style={{ marginTop: 8 }}>
-                        Doorgeschoven: {pushFrom} + 1 — dice weren't rolled
+                        {t('judge.doorschuiven', { from: pushFrom })}
                     </p>
                 )}
                 {pushType === 'blind' && (
                     <p className="dbg-claim-hint" style={{ marginTop: 8 }}>
-                        Blind: {pushFrom} + 1 — rolled without looking
+                        {t('judge.blind', { from: pushFrom })}
                     </p>
                 )}
             </div>
             <p className="dbg-claim-hint">
-                {nextDiceCount === 0
-                    ? "If you believe: nothing left to roll — you're out."
-                    : `If you believe: dan is dat zo 🤙`}
+                {nextDiceCount === 0 ? t('judge.ifBelieveOut') : t('judge.ifBelieve')}
             </p>
             <div className="dbg-spacer" />
             <div className="dbg-actions">
                 <button className="dbg-btn dbg-btn--green" onClick={onBelieve}>
-                    I BELIEVE
+                    {t('judge.believe')}
                 </button>
                 <button className="dbg-btn dbg-btn--red" onClick={onCheck}>
-                    CHECK
+                    {t('judge.check')}
                 </button>
             </div>
         </div>
@@ -714,22 +773,34 @@ function Scoreboard({ players, targetLosses }) {
     );
 }
 
-function BurgerMenu({ open, onToggle, onShowScore, onMainMenu }) {
+function BurgerMenu({ open, onToggle, onShowScore, onMainMenu, onSettings }) {
+    const { t } = useT();
+    const [confirming, setConfirming] = useState(false);
+    const toggle = () => {
+        setConfirming(false);
+        onToggle();
+    };
     return (
         <>
-            <button className="dbg-burger" aria-label="Menu" onClick={onToggle}>
+            <button className="dbg-burger" aria-label={t('menu.label')} onClick={toggle}>
                 <span />
                 <span />
                 <span />
             </button>
             {open && (
-                <div className="dbg-menu-overlay" onClick={onToggle}>
+                <div className="dbg-menu-overlay" onClick={toggle}>
                     <div className="dbg-menu-panel" onClick={(e) => e.stopPropagation()}>
                         <button className="dbg-menu-item" onClick={onShowScore}>
-                            Scoreboard
+                            {t('menu.scoreboard')}
                         </button>
-                        <button className="dbg-menu-item dbg-menu-item--danger" onClick={onMainMenu}>
-                            Main menu
+                        <button className="dbg-menu-item" onClick={onSettings}>
+                            {t('menu.settings')}
+                        </button>
+                        <button
+                            className="dbg-menu-item dbg-menu-item--danger"
+                            onClick={() => (confirming ? onMainMenu() : setConfirming(true))}
+                        >
+                            {confirming ? t('menu.confirmEnd') : t('menu.mainMenu')}
                         </button>
                     </div>
                 </div>
@@ -739,13 +810,14 @@ function BurgerMenu({ open, onToggle, onShowScore, onMainMenu }) {
 }
 
 function ScoreboardModal({ players, targetLosses, onClose }) {
+    const { t } = useT();
     return (
         <div className="dbg-menu-overlay" onClick={onClose}>
             <div className="dbg-menu-panel" onClick={(e) => e.stopPropagation()}>
-                <p className="dbg-eyebrow" style={{ marginBottom: 10 }}>Scoreboard</p>
+                <p className="dbg-eyebrow" style={{ marginBottom: 10 }}>{t('menu.scoreboard')}</p>
                 <Scoreboard players={players} targetLosses={targetLosses} />
                 <button className="dbg-btn dbg-btn--ghost" style={{ marginTop: 16 }} onClick={onClose}>
-                    Close
+                    {t('common.close')}
                 </button>
             </div>
         </div>
@@ -762,6 +834,7 @@ function RevealScreen({
                           targetLosses,
                           onContinue,
                       }) {
+    const { t } = useT();
     const actual = claimNumber(ownerRoll);
     const wasBluff = actual < claimValue;
     const sortedDesc = [...ownerRoll].sort((a, b) => b - a);
@@ -774,8 +847,8 @@ function RevealScreen({
 
     return (
         <div className="dbg-screen">
-            {allSixes && <div className="dbg-out-banner">PIIIIEEEEEEUUUUWW — really all sixes</div>}
-            <p className="dbg-eyebrow">{claimOwnerName}'s actual dice</p>
+            {allSixes && <div className="dbg-out-banner">{t('reveal.allSixes')}</div>}
+            <p className="dbg-eyebrow">{t('reveal.actualDice', { name: claimOwnerName })}</p>
             <div className="dbg-dice-row">
                 {sortedDesc.map((v, i) => (
                     <Die key={i} value={v} />
@@ -783,14 +856,14 @@ function RevealScreen({
             </div>
             <div className="dbg-felt" style={{ marginTop: 18 }}>
                 <p className={`dbg-verdict ${wasBluff ? 'dbg-verdict--bluff' : 'dbg-verdict--true'}`}>
-                    {wasBluff ? 'Bluffing' : 'Telling the truth'}
+                    {wasBluff ? t('reveal.bluffing') : t('reveal.truth')}
                 </p>
                 <div className="dbg-reveal-row">
-                    <span>Claimed</span>
+                    <span>{t('reveal.claimed')}</span>
                     <span>{claimValue}</span>
                 </div>
                 <div className="dbg-reveal-row">
-                    <span>Actual</span>
+                    <span>{t('reveal.actual')}</span>
                     <span>{actual}</span>
                 </div>
             </div>
@@ -800,7 +873,7 @@ function RevealScreen({
             <div className="dbg-spacer" />
             <div className="dbg-actions">
                 <button className="dbg-btn" onClick={() => onContinue(loserIdx)}>
-                    CONTINUE
+                    {t('common.continue')}
                 </button>
             </div>
         </div>
@@ -808,20 +881,21 @@ function RevealScreen({
 }
 
 function AutoOutScreen({ info, onContinue }) {
+    const { t } = useT();
     return (
         <div className="dbg-screen">
-            <div className="dbg-out-banner">PIIIIEEEEEEUUUUWW — all sixes, no mercy</div>
+            <div className="dbg-out-banner">{t('autoOut.banner')}</div>
             <div className="dbg-felt">
                 <p className="dbg-sub" style={{ marginBottom: 6 }}>
-                    {info.claimOwnerName} claimed {info.claimValue} — nothing left after the sixes.
+                    {t('autoOut.claimed', { owner: info.claimOwnerName, value: info.claimValue })}
                 </p>
-                <p className="dbg-title" style={{ fontSize: 26 }}>{info.outName} is out</p>
-                <p className="dbg-sub" style={{ marginBottom: 0 }}>Play resumes after them.</p>
+                <p className="dbg-title" style={{ fontSize: 26 }}>{t('autoOut.isOut', { name: info.outName })}</p>
+                <p className="dbg-sub" style={{ marginBottom: 0 }}>{t('autoOut.resumes')}</p>
             </div>
             <div className="dbg-spacer" />
             <div className="dbg-actions">
                 <button className="dbg-btn" onClick={onContinue}>
-                    CONTINUE
+                    {t('common.continue')}
                 </button>
             </div>
         </div>
@@ -829,19 +903,20 @@ function AutoOutScreen({ info, onContinue }) {
 }
 
 function GameOverScreen({ info, targetLosses, players, onPlayAgain }) {
+    const { t } = useT();
     return (
         <div className="dbg-screen dbg-screen--center">
             <div className="dbg-setup-card dbg-center">
                 <img src={logo} alt="Dobbelen" className="dbg-logo" />
-                <p className="dbg-eyebrow">{targetLosses} strikes — game over</p>
-                <h1 className="dbg-title">{info.name} Lost</h1>
+                <p className="dbg-eyebrow">{t('gameOver.strikes', { n: targetLosses })}</p>
+                <h1 className="dbg-title">{t('gameOver.lost', { name: info.name })}</h1>
 
                 <Scoreboard players={players} targetLosses={targetLosses} />
             </div>
 
             <div className="dbg-actions dbg-actions--static">
                 <button className="dbg-btn" onClick={onPlayAgain}>
-                    PLAY AGAIN
+                    {t('gameOver.playAgain')}
                 </button>
             </div>
         </div>
