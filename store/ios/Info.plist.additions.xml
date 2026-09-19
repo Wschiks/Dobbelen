@@ -1,0 +1,34 @@
+<!-- Add these keys inside the top-level <dict> of ios/App/App/Info.plist. -->
+
+<!-- The app only uses standard OS encryption (and makes no network calls),
+     so it is exempt from export-compliance paperwork. -->
+<key>ITSAppUsesNonExemptEncryption</key>
+<false/>
+
+<!-- Shown under the icon. -->
+<key>CFBundleDisplayName</key>
+<string>Dobbelen</string>
+
+<!-- Tells iOS the app is available in English and Dutch (matches the in-app language switch). -->
+<key>CFBundleLocalizations</key>
+<array>
+    <string>en</string>
+    <string>nl</string>
+</array>
+<key>CFBundleDevelopmentRegion</key>
+<string>en</string>
+
+<!-- Phone, portrait. -->
+<key>UISupportedInterfaceOrientations</key>
+<array>
+    <string>UIInterfaceOrientationPortrait</string>
+</array>
+
+<!--
+  Permission descriptions (NS...UsageDescription): NONE needed.
+  The app does not use the camera, microphone, photos, location, contacts,
+  Bluetooth, notifications or tracking (no NSUserTrackingUsageDescription / ATT prompt).
+  If you ever add one of those features, add its usage description here FIRST — Apple
+  rejects builds that use a protected API without one — and update the Privacy Policy
+  (src/i18n/legal.js) and PrivacyInfo.xcprivacy.
+-->

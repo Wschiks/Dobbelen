@@ -1,0 +1,14 @@
+<!-- Add inside <manifest> of android/app/src/main/AndroidManifest.xml,
+     next to the permissions Capacitor generates. -->
+
+<!-- Haptic feedback while playing (navigator.vibrate). "Normal" permission: granted
+     automatically, no runtime prompt, and it collects no data. -->
+<uses-permission android:name="android.permission.VIBRATE" />
+
+<!--
+  No other permissions are used: no camera, microphone, location, contacts, storage,
+  or notifications. Do not add any without updating the Privacy Policy and the
+  Play Console "Data safety" answers.
+
+  Also set in android/app/build.gradle: applicationId "com.dobbelen.app" (see src/config/appInfo.js).
+-->

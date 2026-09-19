@@ -1,0 +1,15 @@
+{
+  "name": "Dobbelen",
+  "short_name": "Dobbelen",
+  "description": "A dice bluffing game for friends. Pass the phone around the table.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d1712",
+  "theme_color": "#0d1712",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
